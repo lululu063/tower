@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tower of Hanoi</title>
+<style>
+  /* Reset */
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f0f4f8;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    align-items: center;
+    padding: 1rem;
+  }
+
+  h1 {
+    margin-bottom: 0.5rem;
+  }
+
+  #controls {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #controls label {
+    font-weight: 600;
+  }
+
+  input[type=number] {
+    width: 60px;
+    padding: 5px;
+    font-size: 1rem;
+    border-radius: 4px;
+    border: 1px solid #aaa;
+  }
+
+  button {
+    background-color: #4a90e2;
+    border: none;
+    color: white;
+    padding: 8px 14px;
+    font-size: 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  button:disabled {
+    background-color: #a6c8ff;
+    cursor: not-allowed;
+  }
+
+  button:hover:not(:disabled) {
+    background-color: #357abd;
+  }
+
+  #moveCounter {
+    font-size: 1.1rem;
+    font-weight: 600;
+  }
+
+  #game {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 2rem;
+    width: 100%;
+    max-width: 900px;
+  }
+
+  .peg {
+    background: #ddd;
+    border-radius: 8px;
+    width: 30vw;
+    max-width: 280px;
+    height: 320px;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    padding: 1rem 0;
+    position: relative;
+    box-shadow: inset 0 0 8px #bbb;
+  }
+
+  @media (max-width: 600px) {
+    .peg {
+      width: 90vw;
+      max-width: none;
+      height: 260px;
+      margin-bottom: 2rem;
+    }
+  }
+
+  .peg-label {
+    position: absolute;
+    top: 4px;
+    width: 100%;
+    text-align: center;
+    font-weight: 700;
+    color: #444;
+    user-select: none;
+  }
+
+  .pole {
+    position: absolute;
+    bottom: 0;
+    width: 8px;
+    height: 220px;
+    background-color: #555;
+    border-radius: 4px;
+  }
+
+  .peg:nth-child(1) .pole {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .peg:nth-child(2) .pole {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .peg:nth-child(3) .pole {
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .disk {
+    border-radius: 4px;
+    height: 24px;
+    margin-bottom: 6px;
+    cursor: grab;
+    user-select: none;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .disk.dragging {
+    opacity: 0.7;
+    cursor: grabbing;
+    box-shadow: 0 0 10px 2px rgba(0,0,0,0.3);
+  }
+
+  /* Colors for disks */
+  .disk-color-0 { background: #e27d60; }
+  .disk-color-1 { background: #85dcb0; }
+  .disk-color-2 { background: #e8a87c; }
+  .disk-color-3 { background: #c38d9e; }
+  .disk-color-4 { background: #41b3a3; }
+  .disk-color-5 { background: #e6beae; }
+  .disk-color-6 { background: #9bc1bc; }
+  .disk-color-7 { background: #f6abb6; }
+  .disk-color-8 { background: #ffdac1; }
+  .disk-color-9 { background: #b5ead7; }
+
+  /* Highlight drop target */
+  .peg.drag-over {
+    box-shadow: 0 0 12px 3px #4a90e2;
+  }
+
+  /* Info text */
+  #message {
+    margin-top: 1rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #4a90e2;
+    min-height: 1.5rem;
+  }
+</style>
+</head>
+<body>
+  <h1>Tower of Hanoi</h1>
+  <div id="controls">
+    <label for="diskCount">Number of Disks (3-10): </label>
+    <input type="number" id="diskCount" min="3" max="10" value="3" />
+    <button id="resetBtn">Reset</button>
+    <button id="autoSolveBtn">Auto Solve</button>
+    <div id="moveCounter">Moves: 0</div>
+  </div>
+
+  <div id="game">
+    <div class="peg" id="source" data-peg="0" aria-label="Source Peg" tabindex="0">
+      <div class="peg-label">Source</div>
+      <div class="pole"></div>
+    </div>
+    <div class="peg" id="auxiliary" data-peg="1" aria-label="Auxiliary Peg" tabindex="0">
+      <div class="peg-label">Auxiliary</div>
+      <div class="pole"></div>
+    </div>
+    <div class="peg" id="destination" data-peg="2" aria-label="Destination Peg" tabindex="0">
+      <div class="peg-label">Destination</div>
+      <div class="pole"></div>
+    </div>
+  </div>
+
+  <div id="message" role="alert" aria-live="polite"></div>
+
+<script>
+(() => {
+  const gameContainer = document.getElementById('game');
+  const pegs = [...document.querySelectorAll('.peg')];
+  const moveCounterEl = document.getElementById('moveCounter');
+  const diskCountInput = document.getElementById('diskCount');
+  const resetBtn = document.getElementById('resetBtn');
+  const autoSolveBtn = document.getElementById('autoSolveBtn');
+  const messageEl = document.getElementById('message');
+
+  let numDisks = 3;
+  let pegsData = [[], [], []]; // holds disks as numbers, smaller is smaller disk
+  let moveCount = 0;
+  let selectedDisk = null;
+  let selectedPegIndex = null;
+  let isAutoSolving = false;
+
+  // Colors for disks cycling
+  const diskColors = [
+    '#e27d60', '#85dcb0', '#e8a87c', '#c38d9e', '#41b3a3',
+    '#e6beae', '#9bc1bc', '#f6abb6', '#ffdac1', '#b5ead7'
+  ];
+
+  // Initialize/reset the game
+  function initGame() {
+    if (isAutoSolving) return; // block reset during auto-solve
+
+    numDisks = Math.min(Math.max(parseInt(diskCountInput.value) || 3, 3), 10);
+    diskCountInput.value = numDisks;
+    moveCount = 0;
+    pegsData = [[], [], []];
+    selectedDisk = null;
+    selectedPegIndex = null;
+    updateMoveCounter();
+    messageEl.textContent = '';
+
+    // Put all disks in Source peg, biggest (numDisks) at bottom
+    for(let i = numDisks; i >= 1; i--) {
+      pegsData[0].push(i);
+    }
+
+    render();
+  }
+
+  // Render all pegs & disks
+  function render() {
+    pegs.forEach((peg, pegIndex) => {
+      // Clear all disks first
+      peg.querySelectorAll('.disk').forEach(d => d.remove());
+
+      // Create disk elements from pegsData[pegIndex]
+      pegsData[pegIndex].slice().reverse().forEach(diskSize => {
+        const diskEl = document.createElement('div');
+        diskEl.classList.add('disk');
+        diskEl.style.width = (diskSize * 100 / numDisks) + '%';
+        diskEl.style.backgroundColor = diskColors[(diskSize - 1) % diskColors.length];
+        diskEl.classList.add(`disk-color-${(diskSize - 1) % diskColors.length}`);
+        diskEl.setAttribute('draggable', 'true');
+        diskEl.dataset.size = diskSize;
+        diskEl.title = `Disk size ${diskSize}`;
+        peg.appendChild(diskEl);
+
+        // Add event listeners for drag & click
+        diskEl.addEventListener('dragstart', onDragStart);
+        diskEl.addEventListener('dragend', onDragEnd);
+        diskEl.addEventListener('click', onDiskClick);
+      });
+
+      // Peg drag/drop events
+      peg.removeEventListener('dragover', onDragOver);
+      peg.removeEventListener('drop', onDrop);
+      peg.removeEventListener('dragleave', onDragLeave);
+      peg.addEventListener('dragover', onDragOver);
+      peg.addEventListener('drop', onDrop);
+      peg.addEventListener('dragleave', onDragLeave);
+
+      // Click to select peg for moving disk
+      peg.removeEventListener('click', onPegClick);
+      peg.addEventListener('click', onPegClick);
+    });
+
+    highlightMovableDisks();
+  }
+
+  // Highlight disks that can be moved (top disk on each peg)
+  function highlightMovableDisks() {
+    document.querySelectorAll('.disk').forEach(diskEl => {
+      diskEl.style.boxShadow = '';
+      diskEl.style.cursor = 'grab';
+    });
+
+    // Highlight only top disks on each peg
+    pegs.forEach((peg, pegIndex) => {
+      const topDiskSize = pegsData[pegIndex][pegsData[pegIndex].length - 1];
+      if (topDiskSize !== undefined) {
+        const diskEl = [...peg.querySelectorAll('.disk')].find(d => +d.dataset.size === topDiskSize);
+        if (diskEl) {
+          diskEl.style.boxShadow = '0 0 8px 3px #4a90e2';
+          diskEl.style.cursor = 'pointer';
+        }
+      }
+    });
+  }
+
+  // Move disk logic: move top disk from fromPeg to toPeg if valid
+  function moveDisk(fromPeg, toPeg) {
+    if (isAutoSolving) return false;
+
+    if (pegsData[fromPeg].length === 0) return false;
+
+    const disk = pegsData[fromPeg][pegsData[fromPeg].length - 1];
+    const destTopDisk = pegsData[toPeg][pegsData[toPeg].length - 1];
+
+    if (destTopDisk === undefined || disk < destTopDisk) {
+      pegsData[toPeg].push(disk);
+      pegsData[fromPeg].pop();
+      moveCount++;
+      updateMoveCounter();
+      render();
+      checkWin();
+      return true;
+    }
+    return false;
+  }
+
+  // Update move counter display
+  function updateMoveCounter() {
+    moveCounterEl.textContent = `Moves: ${moveCount}`;
+  }
+
+  // Check if user has won (all disks on destination peg)
+  function checkWin() {
+    if (pegsData[2].length === numDisks) {
+      messageEl.textContent = `🎉 You solved it in ${moveCount} moves!`;
+      disableUserInteraction();
+    } else {
+      messageEl.textContent = '';
+      enableUserInteraction();
+    }
+  }
+
+  // Drag & Drop handlers
+  let dragSourcePeg = null;
+
+  function onDragStart(e) {
+    if (isAutoSolving) {
+      e.preventDefault();
+      return;
+    }
+
+    const diskEl = e.target;
+    const pegEl = diskEl.parentElement;
+    const pegIndex = pegs.indexOf(pegEl);
+    const diskSize = +diskEl.dataset.size;
+
+    // Only allow dragging top disk on the peg
+    if (pegsData[pegIndex][pegsData[pegIndex].length - 1] !== diskSize) {
+      e.preventDefault();
+      return;
+    }
+
+    dragSourcePeg = pegIndex;
+    diskEl.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+
+    // For Firefox compatibility
+    e.dataTransfer.setData('text/plain', diskSize);
+  }
+
+  function onDragEnd(e) {
+    e.target.classList.remove('dragging');
+    dragSourcePeg = null;
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    if (isAutoSolving) return;
+    const peg = e.currentTarget;
+    peg.classList.add('drag-over');
+    e.dataTransfer.dropEffect = 'move';
+  }
+
+  function onDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    if (isAutoSolving) return;
+    const peg = e.currentTarget;
+    peg.classList.remove('drag-over');
+    const toPeg = pegs.indexOf(peg);
+
+    if (dragSourcePeg === null) return;
+
+    if (dragSourcePeg !== toPeg) {
+      if (moveDisk(dragSourcePeg, toPeg)) {
+        selectedDisk = null;
+        selectedPegIndex = null;
+      }
+    }
+  }
+
+  // Click to move disk: select disk on one peg, then click another peg to move
+  function onDiskClick(e) {
+    if (isAutoSolving) return;
+
+    e.stopPropagation();
+    const diskEl = e.currentTarget;
+    const pegEl = diskEl.parentElement;
+    const pegIndex = pegs.indexOf(pegEl);
+    const diskSize = +diskEl.dataset.size;
+
+    // Only top disk on peg can be selected
+    if (pegsData[pegIndex][pegsData[pegIndex].length - 1] !== diskSize) return;
+
+    if (selectedDisk === diskEl) {
+      // Deselect if same disk clicked
+      selectedDisk.style.outline = '';
+      selectedDisk = null;
+      selectedPegIndex = null;
+    } else {
+      if (selectedDisk) selectedDisk.style.outline = '';
+      selectedDisk = diskEl;
+      selectedPegIndex = pegIndex;
+      selectedDisk.style.outline = '3px solid #4a90e2';
+    }
+  }
+
+  function onPegClick(e) {
+    if (isAutoSolving) return;
+
+    const pegEl = e.currentTarget;
+    const pegIndex = pegs.indexOf(pegEl);
+
+    // If a disk is selected, try to move it here
+    if (selectedDisk !== null && selectedPegIndex !== null) {
+      if (pegIndex !== selectedPegIndex) {
+        if (moveDisk(selectedPegIndex, pegIndex)) {
+          selectedDisk.style.outline = '';
+          selectedDisk = null;
+          selectedPegIndex = null;
+        }
+      } else {
+        // Clicking same peg deselects
+        selectedDisk.style.outline = '';
+        selectedDisk = null;
+        selectedPegIndex = null;
+      }
+    }
+  }
+
+  // Disable user interactions during auto solve
+  function disableUserInteraction() {
+    pegs.forEach(peg => {
+      peg.style.pointerEvents = 'none';
+    });
+    diskCountInput.disabled = true;
+    resetBtn.disabled = true;
+    autoSolveBtn.disabled = true;
+  }
+
+  function enableUserInteraction() {
+    pegs.forEach(peg => {
+      peg.style.pointerEvents = '';
+    });
+    diskCountInput.disabled = false;
+    resetBtn.disabled = false;
+    autoSolveBtn.disabled = false;
+  }
+
+  // Auto solve logic - recursive Tower of Hanoi solution
+  async function autoSolve(n, from, to, aux) {
+    if (n === 0) return;
+
+    await autoSolve(n - 1, from, aux, to);
+    if (isAutoSolving) {
+      moveDisk(from, to);
+      await sleep(500);
+    }
+    await autoSolve(n - 1, aux, to, from);
+  }
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function startAutoSolve() {
+    if (isAutoSolving) return;
+    isAutoSolving = true;
+    disableUserInteraction();
+    messageEl.textContent = 'Auto-solving...';
+
+    await autoSolve(numDisks, 0, 2, 1);
+
+    isAutoSolving = false;
+    messageEl.textContent = `Solved in ${moveCount} moves!`;
+    enableUserInteraction();
+  }
+
+  // Event listeners
+  resetBtn.addEventListener('click', initGame);
+  autoSolveBtn.addEventListener('click', startAutoSolve);
+
+  diskCountInput.addEventListener('change', () => {
+    const val = parseInt(diskCountInput.value);
+    if (val < 3) diskCountInput.value = 3;
+    else if (val > 10) diskCountInput.value = 10;
+    initGame();
+  });
+
+  // Keyboard accessibility: allow peg selection by keyboard
+  pegs.forEach(peg => {
+    peg.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        peg.click();
+      }
+    });
+  });
+
+  // Initialize game on load
+  initGame();
+
+})();
+</script>
+</body>
+</html>
